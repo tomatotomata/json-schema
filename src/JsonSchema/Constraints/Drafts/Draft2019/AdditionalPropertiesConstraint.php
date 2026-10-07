@@ -22,7 +22,7 @@ class AdditionalPropertiesConstraint implements ConstraintInterface
         $this->initialiseErrorBag($this->factory);
     }
 
-    public function check(&$value, $schema = null, ?JsonPointer $path = null, $i = null): void
+    public function check(& $value, $schema = null, ?JsonPointer $path = null, $i = null): void
     {
         if (!property_exists($schema, 'additionalProperties')) {
             return;
@@ -58,21 +58,20 @@ class AdditionalPropertiesConstraint implements ConstraintInterface
         if (is_object($schema->additionalProperties)) {
             foreach ($additionalProperties as $key => $additionalPropertiesValue) {
                 $schemaConstraint = $this->factory->createInstanceFor('schema');
-                $propertyPath = ($path ?? new JsonPointer(''))->withPropertyPaths(
-                    array_merge(($path ?? new JsonPointer(''))->getPropertyPaths(), [$key])
-                );
-                $schemaConstraint->check($additionalPropertiesValue, $schema->additionalProperties, $propertyPath, $i);
-                if ($schemaConstraint->isValid()) {
-                    unset($additionalProperties[$key]);
+                $schemaConstraint->check($additionalPropertiesValue, $schema->additionalProperties, ($path ?? new JsonPointer(''))->withAppendedPath($key), $i);
+
+                // The property is permitted by the schema, so it is never an "additional property"
+                // error; what it failed is the sub-schema, and those errors carry the reason.
+                if (!$schemaConstraint->isValid()) {
+                    $this->addErrors($schemaConstraint->getErrors());
                 }
+
+                unset($additionalProperties[$key]);
             }
         }
 
         foreach ($additionalProperties as $key => $additionalPropertiesValue) {
-            $propertyPath = ($path ?? new JsonPointer(''))->withPropertyPaths(
-                array_merge(($path ?? new JsonPointer(''))->getPropertyPaths(), [$key])
-            );
-            $this->addError(ConstraintError::ADDITIONAL_PROPERTIES(), $propertyPath, ['found' => $key]);
+            $this->addError(ConstraintError::ADDITIONAL_PROPERTIES(), ($path ?? new JsonPointer(''))->withAppendedPath($key), ['found' => $key]);
         }
     }
 
